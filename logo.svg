@@ -1,0 +1,55 @@
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadSettings();
+  const cart = getCart();
+  const form = qs('[data-checkout-form]');
+  const cartBox = qs('[data-checkout-cart]');
+  const payBox = qs('[data-payment-box]');
+  const result = qs('[data-checkout-result]');
+  function render(){
+    if(cartBox){
+      cartBox.innerHTML = cart.length ? cart.map(i=>`<div class="summary-row"><span>${i.quantity} x ${i.name}</span><strong>${fmtPrice(Number(i.price)*Number(i.quantity), i.currency)}</strong></div>`).join('') + `<div class="summary-row total"><span>Toplam</span><span>${fmtPrice(cartTotal())}</span></div>` : `<div class="empty">Sepet boş.</div>`;
+    }
+    const p = OPB.state.payment || window.OPB_FALLBACK.payment;
+    if(payBox){
+      payBox.innerHTML = `<h3>IBAN ile Ödeme</h3><p>Banka: <b>${p.bank_name || 'Admin panelden eklenecek'}</b></p><p>Alıcı: <b>${p.account_holder || 'Admin panelden eklenecek'}</b></p><div class="iban">${p.iban || 'Admin panelden IBAN eklenecek'}</div><p>${p.payment_note || 'Ödeme açıklamasına sipariş numaranızı yazınız.'}</p>`;
+    }
+  }
+  render();
+  if(!form) return;
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    if(!cart.length){ toast('Sepet boş.'); return; }
+    if(!window.opbDb){ result.innerHTML = `<div class="err-box">Supabase URL girilmeden gerçek sipariş kaydı yapılamaz. assets/js/config.js içindeki SUPABASE_URL alanını doldur.</div>`; return; }
+    const fd = new FormData(form);
+    const orderId = crypto.randomUUID();
+    const orderNo = 'OP-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.random().toString(36).slice(2,7).toUpperCase();
+    let receiptPath = '';
+    const file = fd.get('receipt');
+    if(file && file.size){
+      const ext = file.name.split('.').pop();
+      receiptPath = `${orderId}/${Date.now()}.${ext}`;
+      const {error:upErr} = await window.opbDb.storage.from('payment-receipts').upload(receiptPath, file, { upsert:false });
+      if(upErr){ result.innerHTML = `<div class="err-box">Dekont yüklenemedi: ${upErr.message}</div>`; return; }
+    }
+    const order = {
+      id: orderId,
+      order_no: orderNo,
+      customer_name: fd.get('name'),
+      customer_phone: fd.get('phone'),
+      customer_email: fd.get('email') || '',
+      customer_city: fd.get('city') || '',
+      customer_address: fd.get('address') || '',
+      total_amount: cartTotal(),
+      status: receiptPath ? 'payment_sent' : 'waiting_payment',
+      payment_receipt_path: receiptPath,
+      customer_note: fd.get('note') || ''
+    };
+    const {error:oErr} = await window.opbDb.from('orders').insert(order);
+    if(oErr){ result.innerHTML = `<div class="err-box">Sipariş oluşturulamadı: ${oErr.message}</div>`; return; }
+    const items = cart.map(i => ({ order_id:orderId, product_id:i.id?.startsWith('p') ? null : i.id, product_name:i.name, unit_price:Number(i.price), quantity:Number(i.quantity||1) }));
+    const {error:iErr} = await window.opbDb.from('order_items').insert(items);
+    if(iErr){ result.innerHTML = `<div class="err-box">Sipariş ürünleri kaydedilemedi: ${iErr.message}</div>`; return; }
+    clearCart(); form.reset(); render();
+    result.innerHTML = `<div class="ok-box"><h3>Sipariş alındı</h3><p>Sipariş numaranız: <b>${orderNo}</b></p><p>WhatsApp üzerinden sipariş numaranızı ileterek hızlı teyit alabilirsiniz.</p><a class="btn success" target="_blank" href="${whatsappUrl(`Merhaba, ${orderNo} numaralı siparişim hakkında bilgi almak istiyorum.`)}">WhatsApp'tan Teyit Et</a></div>`;
+  });
+});

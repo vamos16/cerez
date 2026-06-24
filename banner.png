@@ -1,0 +1,15 @@
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadSettings();
+  const form = qs('[data-contact-form]');
+  const result = qs('[data-contact-result]');
+  if(!form) return;
+  form.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(form);
+    if(!window.opbDb){ result.innerHTML = `<div class="err-box">Mesaj kaydı için Supabase URL girilmesi gerekiyor.</div>`; return; }
+    const payload = { name:fd.get('name'), phone:fd.get('phone'), email:fd.get('email') || '', subject:fd.get('subject') || '', message:fd.get('message') };
+    const {error} = await window.opbDb.from('contact_messages').insert(payload);
+    if(error){ result.innerHTML = `<div class="err-box">Mesaj gönderilemedi: ${error.message}</div>`; return; }
+    form.reset(); result.innerHTML = `<div class="ok-box">Mesajınız alındı. En kısa sürede dönüş yapılacaktır.</div>`;
+  });
+});

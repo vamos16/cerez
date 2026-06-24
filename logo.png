@@ -1,0 +1,199 @@
+const Admin = { categories: [], products: [], orders: [], editingProductId: null, editingCategoryId: null };
+
+async function requireAdmin(){
+  const login = qs('[data-admin-login]');
+  const app = qs('[data-admin-app]');
+  if(!window.opbDb){
+    login.innerHTML = `<div class="login-card"><img src="assets/img/logo.png" style="width:70px;border-radius:22px;margin-bottom:12px" alt=""><h2>Supabase URL eksik</h2><p class="muted">Admin panelin çalışması için <b>assets/js/config.js</b> içindeki SUPABASE_URL alanını doldurman gerekiyor.</p></div>`;
+    return;
+  }
+  const {data:{session}} = await window.opbDb.auth.getSession();
+  if(!session){ login.classList.remove('hidden'); app.classList.add('hidden'); return; }
+  const {data:isAdmin, error} = await window.opbDb.rpc('is_admin');
+  if(error || !isAdmin){
+    await window.opbDb.auth.signOut();
+    login.classList.remove('hidden'); app.classList.add('hidden');
+    qs('[data-login-result]').innerHTML = `<div class="err-box">Bu kullanıcı admin yetkisine sahip değil. SQL içindeki admin_users kaydını kontrol et.</div>`;
+    return;
+  }
+  login.classList.add('hidden'); app.classList.remove('hidden');
+  await loadAdminData();
+}
+async function loadAdminData(){
+  await Promise.all([adminLoadSettings(), adminLoadPayment(), adminLoadCategories(), adminLoadProducts(), adminLoadOrders(), adminLoadMessages()]);
+}
+function bindAdminNavigation(){
+  qsa('[data-admin-tab]').forEach(btn => btn.addEventListener('click',()=>{
+    qsa('[data-admin-tab]').forEach(b=>b.classList.remove('active'));
+    qsa('.admin-section').forEach(s=>s.classList.remove('active'));
+    btn.classList.add('active');
+    qs(`#${btn.dataset.adminTab}`).classList.add('active');
+  }));
+}
+async function adminLoadSettings(){
+  const {data,error} = await window.opbDb.from('site_settings').select('*').eq('id',1).maybeSingle();
+  if(error) return;
+  const s = data || window.OPB_FALLBACK.settings;
+  const f = qs('[data-settings-form]');
+  if(!f) return;
+  ['site_name','slogan','phone','whatsapp','email','city','address','instagram','facebook','hero_title','hero_subtitle','about_title','about_text','logo_url','banner_url'].forEach(k=>{ if(f.elements[k]) f.elements[k].value = s[k] || ''; });
+}
+async function adminLoadPayment(){
+  const {data,error} = await window.opbDb.from('payment_settings').select('*').eq('id',1).maybeSingle();
+  if(error) return;
+  const p = data || window.OPB_FALLBACK.payment;
+  const f = qs('[data-payment-form]');
+  if(!f) return;
+  ['bank_name','iban','account_holder','payment_note'].forEach(k=>{ if(f.elements[k]) f.elements[k].value = p[k] || ''; });
+  if(f.elements.is_active) f.elements.is_active.checked = p.is_active !== false;
+}
+async function adminLoadCategories(){
+  const {data,error} = await window.opbDb.from('categories').select('*').order('sort_order',{ascending:true});
+  if(error){ toast(error.message); return; }
+  Admin.categories = data || [];
+  const sel = qs('[name="category_id"]');
+  if(sel) sel.innerHTML = `<option value="">Kategori seç</option>` + Admin.categories.map(c=>`<option value="${c.id}">${c.name}</option>`).join('');
+  renderCategoriesTable();
+}
+async function adminLoadProducts(){
+  const {data,error} = await window.opbDb.from('products').select('*, categories(name)').order('created_at',{ascending:false});
+  if(error){ toast(error.message); return; }
+  Admin.products = (data || []).map(p=>({...p, category_name:p.categories?.name || ''}));
+  renderProductsTable();
+}
+async function adminLoadOrders(){
+  const {data,error} = await window.opbDb.from('orders').select('*, order_items(*)').order('created_at',{ascending:false});
+  if(error){ toast(error.message); return; }
+  Admin.orders = data || [];
+  renderOrdersTable();
+}
+async function adminLoadMessages(){
+  const box = qs('[data-messages-table]');
+  if(!box) return;
+  const {data,error} = await window.opbDb.from('contact_messages').select('*').order('created_at',{ascending:false});
+  if(error){ box.innerHTML = `<div class="err-box">${error.message}</div>`; return; }
+  box.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Ad</th><th>Telefon</th><th>Konu</th><th>Mesaj</th></tr></thead><tbody>${(data||[]).map(m=>`<tr><td>${new Date(m.created_at).toLocaleString('tr-TR')}</td><td>${m.name}</td><td>${m.phone}</td><td>${m.subject || '-'}</td><td>${m.message}</td></tr>`).join('') || '<tr><td colspan="5">Mesaj yok.</td></tr>'}</tbody></table></div>`;
+}
+function renderCategoriesTable(){
+  const box = qs('[data-categories-table]');
+  if(!box) return;
+  box.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Sıra</th><th>Kategori</th><th>Slug</th><th>Aktif</th><th>İşlem</th></tr></thead><tbody>${Admin.categories.map(c=>`<tr><td>${c.sort_order}</td><td><b>${c.name}</b><br><span class="muted">${c.description || ''}</span></td><td>${c.slug}</td><td>${c.is_active ? 'Evet' : 'Hayır'}</td><td><div class="row-actions"><button class="small-btn primary" data-edit-cat="${c.id}">Düzenle</button><button class="small-btn danger" data-delete-cat="${c.id}">Sil</button></div></td></tr>`).join('') || '<tr><td colspan="5">Kategori yok.</td></tr>'}</tbody></table></div>`;
+  qsa('[data-edit-cat]').forEach(b=>b.addEventListener('click',()=>editCategory(b.dataset.editCat)));
+  qsa('[data-delete-cat]').forEach(b=>b.addEventListener('click',()=>deleteCategory(b.dataset.deleteCat)));
+}
+function renderProductsTable(){
+  const box = qs('[data-products-table]');
+  if(!box) return;
+  box.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Görsel</th><th>Ürün</th><th>Kategori</th><th>Fiyat</th><th>Stok</th><th>Aktif</th><th>İşlem</th></tr></thead><tbody>${Admin.products.map(p=>`<tr><td>${p.main_image_url ? `<img class="mini-img" src="${p.main_image_url}" alt="">` : '⚙️'}</td><td><b>${p.name}</b><br><span class="muted">${p.vehicle_brand || ''} ${p.vehicle_model || ''} ${p.vehicle_years || ''}</span></td><td>${p.category_name || '-'}</td><td>${fmtPrice(p.price,p.currency)}</td><td>${statusLabel(p.stock_status)}<br><span class="muted">${p.stock_quantity || 0} adet</span></td><td>${p.is_active ? 'Evet' : 'Hayır'}</td><td><div class="row-actions"><button class="small-btn primary" data-edit-product="${p.id}">Düzenle</button><button class="small-btn danger" data-delete-product="${p.id}">Sil</button></div></td></tr>`).join('') || '<tr><td colspan="7">Ürün yok.</td></tr>'}</tbody></table></div>`;
+  qsa('[data-edit-product]').forEach(b=>b.addEventListener('click',()=>editProduct(b.dataset.editProduct)));
+  qsa('[data-delete-product]').forEach(b=>b.addEventListener('click',()=>deleteProduct(b.dataset.deleteProduct)));
+}
+function renderOrdersTable(){
+  const box = qs('[data-orders-table]');
+  if(!box) return;
+  const labels = {new:'Yeni',waiting_payment:'Ödeme bekliyor',payment_sent:'Dekont yüklendi',confirmed:'Onaylandı',shipped:'Kargoda',completed:'Tamamlandı',cancelled:'İptal'};
+  box.innerHTML = `<div class="table-wrap"><table><thead><tr><th>Sipariş</th><th>Müşteri</th><th>Ürünler</th><th>Tutar</th><th>Durum</th><th>Dekont</th><th>İşlem</th></tr></thead><tbody>${Admin.orders.map(o=>`<tr><td><b>${o.order_no}</b><br><span class="muted">${new Date(o.created_at).toLocaleString('tr-TR')}</span></td><td><b>${o.customer_name}</b><br>${o.customer_phone}<br><span class="muted">${o.customer_city || ''}</span></td><td>${(o.order_items||[]).map(i=>`${i.quantity} x ${i.product_name}`).join('<br>') || '-'}</td><td>${fmtPrice(o.total_amount)}</td><td><select class="select" data-order-status="${o.id}">${Object.keys(labels).map(k=>`<option value="${k}" ${o.status===k?'selected':''}>${labels[k]}</option>`).join('')}</select></td><td>${o.payment_receipt_path ? `<button class="small-btn primary" data-receipt="${o.payment_receipt_path}">Aç</button>` : '-'}</td><td><button class="small-btn primary" data-save-order="${o.id}">Kaydet</button></td></tr>`).join('') || '<tr><td colspan="7">Sipariş yok.</td></tr>'}</tbody></table></div>`;
+  qsa('[data-save-order]').forEach(b=>b.addEventListener('click',()=>saveOrderStatus(b.dataset.saveOrder)));
+  qsa('[data-receipt]').forEach(b=>b.addEventListener('click',()=>openReceipt(b.dataset.receipt)));
+}
+async function openReceipt(path){
+  const {data,error} = await window.opbDb.storage.from('payment-receipts').createSignedUrl(path, 60*10);
+  if(error){ toast(error.message); return; }
+  window.open(data.signedUrl, '_blank');
+}
+async function saveOrderStatus(id){
+  const status = qs(`[data-order-status="${id}"]`).value;
+  const {error} = await window.opbDb.from('orders').update({status}).eq('id',id);
+  if(error) toast(error.message); else toast('Sipariş durumu güncellendi.');
+}
+function editCategory(id){
+  const c = Admin.categories.find(x=>x.id===id); if(!c) return;
+  Admin.editingCategoryId = id;
+  const f = qs('[data-category-form]');
+  ['name','slug','description','image_url','sort_order'].forEach(k=>{ if(f.elements[k]) f.elements[k].value = c[k] || ''; });
+  f.elements.is_active.checked = c.is_active !== false;
+  qs('[data-category-form-title]').textContent = 'Kategori Düzenle';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+async function deleteCategory(id){
+  if(!confirm('Kategori silinsin mi? Ürünlerden kategori bağlantısı kaldırılır.')) return;
+  const {error} = await window.opbDb.from('categories').delete().eq('id',id);
+  if(error) toast(error.message); else { toast('Kategori silindi.'); await adminLoadCategories(); await adminLoadProducts(); }
+}
+function clearCategoryForm(){
+  Admin.editingCategoryId = null; const f = qs('[data-category-form]'); f.reset(); f.elements.sort_order.value = 0; f.elements.is_active.checked = true; qs('[data-category-form-title]').textContent = 'Kategori Ekle';
+}
+function editProduct(id){
+  const p = Admin.products.find(x=>x.id===id); if(!p) return;
+  Admin.editingProductId = id;
+  const f = qs('[data-product-form]');
+  ['category_id','name','slug','sku','price','old_price','stock_status','stock_quantity','vehicle_brand','vehicle_model','vehicle_years','oem_code','part_condition','short_description','description','main_image_url'].forEach(k=>{ if(f.elements[k]) f.elements[k].value = p[k] ?? ''; });
+  f.elements.is_featured.checked = p.is_featured === true;
+  f.elements.is_active.checked = p.is_active !== false;
+  qs('[data-product-form-title]').textContent = 'Ürün Düzenle';
+  window.scrollTo({top:0,behavior:'smooth'});
+}
+function clearProductForm(){
+  Admin.editingProductId = null; const f = qs('[data-product-form]'); f.reset(); f.elements.currency.value = 'TL'; f.elements.stock_status.value = 'in_stock'; f.elements.stock_quantity.value = 1; f.elements.part_condition.value = 'used'; f.elements.is_active.checked = true; qs('[data-product-form-title]').textContent = 'Ürün Ekle';
+}
+async function deleteProduct(id){
+  if(!confirm('Ürün silinsin mi?')) return;
+  const {error} = await window.opbDb.from('products').delete().eq('id',id);
+  if(error) toast(error.message); else { toast('Ürün silindi.'); await adminLoadProducts(); }
+}
+async function uploadProductImage(file, name){
+  if(!file || !file.size) return '';
+  const ext = file.name.split('.').pop().toLowerCase();
+  const path = `products/${Date.now()}-${slugify(name || 'urun')}.${ext}`;
+  const {error} = await window.opbDb.storage.from('product-images').upload(path, file, {upsert:false});
+  if(error) throw error;
+  const {data} = window.opbDb.storage.from('product-images').getPublicUrl(path);
+  return data.publicUrl;
+}
+function bindForms(){
+  qs('[data-login-form]')?.addEventListener('submit', async (e)=>{
+    e.preventDefault();
+    const fd = new FormData(e.currentTarget);
+    const {error} = await window.opbDb.auth.signInWithPassword({ email:fd.get('email'), password:fd.get('password') });
+    if(error){ qs('[data-login-result]').innerHTML = `<div class="err-box">${error.message}</div>`; return; }
+    await requireAdmin();
+  });
+  qs('[data-logout]')?.addEventListener('click', async ()=>{ await window.opbDb.auth.signOut(); location.reload(); });
+  qs('[data-settings-form]')?.addEventListener('submit', async(e)=>{
+    e.preventDefault(); const fd = new FormData(e.currentTarget); const payload = Object.fromEntries(fd.entries());
+    const {error} = await window.opbDb.from('site_settings').update(payload).eq('id',1);
+    if(error) toast(error.message); else toast('Site ayarları kaydedildi.');
+  });
+  qs('[data-payment-form]')?.addEventListener('submit', async(e)=>{
+    e.preventDefault(); const fd = new FormData(e.currentTarget); const payload = Object.fromEntries(fd.entries()); payload.is_active = e.currentTarget.elements.is_active.checked;
+    const {error} = await window.opbDb.from('payment_settings').update(payload).eq('id',1);
+    if(error) toast(error.message); else toast('Ödeme bilgileri kaydedildi.');
+  });
+  qs('[data-category-form]')?.addEventListener('submit', async(e)=>{
+    e.preventDefault(); const f=e.currentTarget; const fd=new FormData(f);
+    const payload = { name:fd.get('name'), slug:fd.get('slug') || slugify(fd.get('name')), description:fd.get('description') || '', image_url:fd.get('image_url') || '', sort_order:Number(fd.get('sort_order')||0), is_active:f.elements.is_active.checked };
+    const q = Admin.editingCategoryId ? window.opbDb.from('categories').update(payload).eq('id',Admin.editingCategoryId) : window.opbDb.from('categories').insert(payload);
+    const {error}= await q; if(error) toast(error.message); else { toast('Kategori kaydedildi.'); clearCategoryForm(); await adminLoadCategories(); }
+  });
+  qs('[data-category-clear]')?.addEventListener('click', clearCategoryForm);
+  qs('[data-product-form]')?.addEventListener('submit', async(e)=>{
+    e.preventDefault(); const f=e.currentTarget; const fd=new FormData(f);
+    let imageUrl = fd.get('main_image_url') || '';
+    try{
+      const uploaded = await uploadProductImage(fd.get('image_file'), fd.get('name'));
+      if(uploaded) imageUrl = uploaded;
+    }catch(err){ toast('Görsel yüklenemedi: ' + err.message); return; }
+    const payload = {
+      category_id: fd.get('category_id') || null, name: fd.get('name'), slug: fd.get('slug') || slugify(fd.get('name')), sku: fd.get('sku') || '',
+      price: Number(fd.get('price') || 0), old_price: fd.get('old_price') ? Number(fd.get('old_price')) : null, currency: fd.get('currency') || 'TL',
+      stock_status: fd.get('stock_status') || 'in_stock', stock_quantity: Number(fd.get('stock_quantity') || 0),
+      vehicle_brand: fd.get('vehicle_brand') || '', vehicle_model: fd.get('vehicle_model') || '', vehicle_years: fd.get('vehicle_years') || '', oem_code: fd.get('oem_code') || '',
+      part_condition: fd.get('part_condition') || 'used', short_description: fd.get('short_description') || '', description: fd.get('description') || '',
+      main_image_url: imageUrl, is_featured: f.elements.is_featured.checked, is_active: f.elements.is_active.checked
+    };
+    const q = Admin.editingProductId ? window.opbDb.from('products').update(payload).eq('id',Admin.editingProductId) : window.opbDb.from('products').insert(payload);
+    const {error}= await q; if(error) toast(error.message); else { toast('Ürün kaydedildi.'); clearProductForm(); await adminLoadProducts(); }
+  });
+  qs('[data-product-clear]')?.addEventListener('click', clearProductForm);
+}
+document.addEventListener('DOMContentLoaded', () => { bindAdminNavigation(); bindForms(); requireAdmin(); });
