@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Admin Panel | Oto Parça Bul</title>
+  <link rel="icon" type="image/png" href="assets/img/logo.png"><link rel="stylesheet" href="assets/css/style.css">
+</head>
+<body>
+  <div data-admin-login>
+    <div class="login-card">
+      <img src="assets/img/logo.png" alt="Logo" style="width:76px;border-radius:24px;margin-bottom:14px">
+      <h1>Admin Girişi</h1>
+      <p class="muted">Ürün, kategori, IBAN, site yazıları ve siparişleri buradan yönet.</p>
+      <div data-login-result class="mb"></div>
+      <form class="form-grid" data-login-form>
+        <div class="field"><label>E-posta</label><input class="input" type="email" name="email" value="vamos0443@gmail.com" required></div>
+        <div class="field"><label>Şifre</label><input class="input" type="password" name="password" required></div>
+        <button class="btn accent" type="submit">Giriş Yap</button>
+      </form>
+      <p class="muted mt">Şifreyi Supabase Authentication > Users bölümünde sen belirliyorsun.</p>
+    </div>
+  </div>
+
+  <div class="admin-shell hidden" data-admin-app>
+    <aside class="admin-sidebar">
+      <a class="logo" href="index.html"><img src="assets/img/logo.png" alt="Logo"><span>Oto Parça Bul</span></a>
+      <div class="admin-menu">
+        <button class="active" data-admin-tab="dashboard">Panel</button>
+        <button data-admin-tab="products">Ürünler</button>
+        <button data-admin-tab="categories">Kategoriler</button>
+        <button data-admin-tab="orders">Siparişler</button>
+        <button data-admin-tab="payment">IBAN / Ödeme</button>
+        <button data-admin-tab="settings">Site Ayarları</button>
+        <button data-admin-tab="messages">Mesajlar</button>
+      </div>
+      <button class="btn light mt" data-logout style="width:100%">Çıkış Yap</button>
+      <a class="btn ghost mt" href="index.html" style="width:100%;color:#fff;border-color:rgba(255,255,255,.2)">Siteye Git</a>
+    </aside>
+
+    <main class="admin-main">
+      <div class="admin-top"><div><h1>Admin Panel</h1><p class="muted">Fiyat, stok, görsel, kategori, IBAN ve sipariş yönetimi.</p></div></div>
+
+      <section id="dashboard" class="admin-section active">
+        <div class="grid grid-3">
+          <div class="card"><h3>Ürün Yönetimi</h3><p>Ürün ekle, düzenle, görsel yükle, stok ve fiyat değiştir.</p></div>
+          <div class="card"><h3>Sipariş Takibi</h3><p>Müşteri siparişleri, ürünler ve dekontlar burada görünür.</p></div>
+          <div class="card"><h3>Site Ayarları</h3><p>Telefon, WhatsApp, slogan, hakkımızda ve IBAN bilgilerini yönet.</p></div>
+        </div>
+        <div class="card mt"><h3>Kurulum Notu</h3><p>Admin panelin tam çalışması için Supabase SQL dosyasını çalıştırmış olman ve <b>assets/js/config.js</b> içine SUPABASE_URL yazman gerekir.</p></div>
+      </section>
+
+      <section id="products" class="admin-section">
+        <div class="card mb"><h2 data-product-form-title>Ürün Ekle</h2><form class="form-grid" data-product-form>
+          <div class="form-3 grid"><div class="field"><label>Kategori</label><select class="select" name="category_id"></select></div><div class="field"><label>Ürün Adı</label><input class="input" name="name" required></div><div class="field"><label>Slug</label><input class="input" name="slug" placeholder="Boşsa otomatik"></div></div>
+          <div class="form-3 grid"><div class="field"><label>Stok Kodu</label><input class="input" name="sku"></div><div class="field"><label>Fiyat</label><input class="input" name="price" type="number" step="0.01" required></div><div class="field"><label>Eski Fiyat</label><input class="input" name="old_price" type="number" step="0.01"></div></div>
+          <div class="form-3 grid"><div class="field"><label>Para Birimi</label><input class="input" name="currency" value="TL"></div><div class="field"><label>Stok Durumu</label><select class="select" name="stock_status"><option value="in_stock">Stokta var</option><option value="out_of_stock">Stok yok</option><option value="pre_order">Ön sipariş</option></select></div><div class="field"><label>Adet</label><input class="input" name="stock_quantity" type="number" value="1"></div></div>
+          <div class="form-3 grid"><div class="field"><label>Araç Markası</label><input class="input" name="vehicle_brand"></div><div class="field"><label>Araç Modeli</label><input class="input" name="vehicle_model"></div><div class="field"><label>Yıl Aralığı</label><input class="input" name="vehicle_years"></div></div>
+          <div class="form-3 grid"><div class="field"><label>OEM Kodu</label><input class="input" name="oem_code"></div><div class="field"><label>Parça Durumu</label><select class="select" name="part_condition"><option value="used">Çıkma</option><option value="new">Sıfır</option><option value="original">Orijinal</option><option value="aftermarket">Yan sanayi</option><option value="refurbished">Yenilenmiş</option></select></div><div class="field"><label>Mevcut Görsel URL</label><input class="input" name="main_image_url"></div></div>
+          <div class="field"><label>Ürün Görseli Yükle</label><input class="input" name="image_file" type="file" accept="image/*"></div>
+          <div class="field"><label>Kısa Açıklama</label><input class="input" name="short_description"></div>
+          <div class="field"><label>Detaylı Açıklama</label><textarea class="input" name="description" rows="4"></textarea></div>
+          <div class="form-2 grid"><label><input type="checkbox" name="is_featured"> Öne çıkan ürün</label><label><input type="checkbox" name="is_active" checked> Aktif ürün</label></div>
+          <div class="hero-actions"><button class="btn accent" type="submit">Ürünü Kaydet</button><button class="btn ghost" data-product-clear type="button">Temizle</button></div>
+        </form></div>
+        <div data-products-table></div>
+      </section>
+
+      <section id="categories" class="admin-section">
+        <div class="card mb"><h2 data-category-form-title>Kategori Ekle</h2><form class="form-grid" data-category-form>
+          <div class="form-3 grid"><div class="field"><label>Kategori Adı</label><input class="input" name="name" required></div><div class="field"><label>Slug</label><input class="input" name="slug" placeholder="Boşsa otomatik"></div><div class="field"><label>Sıra</label><input class="input" name="sort_order" type="number" value="0"></div></div>
+          <div class="field"><label>Açıklama</label><input class="input" name="description"></div><div class="field"><label>Görsel URL</label><input class="input" name="image_url"></div><label><input type="checkbox" name="is_active" checked> Aktif kategori</label>
+          <div class="hero-actions"><button class="btn accent" type="submit">Kategori Kaydet</button><button class="btn ghost" data-category-clear type="button">Temizle</button></div>
+        </form></div>
+        <div data-categories-table></div>
+      </section>
+
+      <section id="orders" class="admin-section"><div data-orders-table></div></section>
+
+      <section id="payment" class="admin-section"><div class="card"><h2>IBAN / Ödeme Bilgileri</h2><form class="form-grid" data-payment-form><div class="form-2 grid"><div class="field"><label>Banka Adı</label><input class="input" name="bank_name"></div><div class="field"><label>Alıcı Adı</label><input class="input" name="account_holder"></div></div><div class="field"><label>IBAN</label><input class="input" name="iban"></div><div class="field"><label>Ödeme Açıklaması</label><input class="input" name="payment_note"></div><label><input type="checkbox" name="is_active" checked> Ödeme bilgisi aktif</label><button class="btn accent" type="submit">Ödeme Bilgisini Kaydet</button></form></div></section>
+
+      <section id="settings" class="admin-section"><div class="card"><h2>Site Ayarları</h2><form class="form-grid" data-settings-form><div class="form-2 grid"><div class="field"><label>Site Adı</label><input class="input" name="site_name"></div><div class="field"><label>Slogan</label><input class="input" name="slogan"></div></div><div class="form-3 grid"><div class="field"><label>Telefon</label><input class="input" name="phone"></div><div class="field"><label>WhatsApp</label><input class="input" name="whatsapp"></div><div class="field"><label>E-posta</label><input class="input" name="email"></div></div><div class="form-2 grid"><div class="field"><label>Şehir</label><input class="input" name="city"></div><div class="field"><label>Adres</label><input class="input" name="address"></div></div><div class="form-2 grid"><div class="field"><label>Instagram</label><input class="input" name="instagram"></div><div class="field"><label>Facebook</label><input class="input" name="facebook"></div></div><div class="field"><label>Ana Sayfa Başlık</label><input class="input" name="hero_title"></div><div class="field"><label>Ana Sayfa Alt Yazı</label><textarea class="input" name="hero_subtitle" rows="3"></textarea></div><div class="field"><label>Hakkımızda Başlık</label><input class="input" name="about_title"></div><div class="field"><label>Hakkımızda Yazısı</label><textarea class="input" name="about_text" rows="5"></textarea></div><div class="form-2 grid"><div class="field"><label>Logo URL</label><input class="input" name="logo_url"></div><div class="field"><label>Banner URL</label><input class="input" name="banner_url"></div></div><button class="btn accent" type="submit">Site Ayarlarını Kaydet</button></form></div></section>
+
+      <section id="messages" class="admin-section"><div data-messages-table></div></section>
+    </main>
+  </div>
+
+  <script src="assets/js/config.js"></script><script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script><script src="assets/js/supabase-client.js"></script><script src="assets/js/fallback-data.js"></script><script src="assets/js/main.js"></script><script src="assets/js/admin.js"></script>
+</body></html>
